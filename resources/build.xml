@@ -47,6 +47,7 @@
 	<property name="project.data" location="data"/>
 	<property name="project.lib" location="lib"/>
 	<property name="project.bin" location="bin"/>
+	<property name="project.shaders" location="shaders"/>
 	<property name="project.bin.data" location="${project.bin}/data"/>
 	<property name="project.examples" location="examples"/>
 	<property name="project.reference" location="reference"/>
@@ -162,7 +163,8 @@ ${line}
 	  	<mkdir dir="${project.tmp}/${project.name}/${folder}" />
   		<mkdir dir="${project.tmp}/${project.name}/examples" />
 	  	<mkdir dir="${project.tmp}/${project.name}/reference" />
-  		<mkdir dir="${project.tmp}/${project.name}/src" />
+		<mkdir dir="${project.tmp}/${project.name}/src" />
+		<mkdir dir="${project.tmp}/${project.name}/shaders" />
   		<copy todir="${project.tmp}/${project.name}/examples">
   			<fileset dir="${project.examples}">
 	  			<exclude name="**/*README*"/>
@@ -171,9 +173,12 @@ ${line}
   		<copy todir="${project.tmp}/${project.name}/src">
   			<fileset dir="${project.src}"/>
 	  	</copy>
-	  	<copy todir="${project.tmp}/${project.name}/${folder}">
-  			<fileset dir="${project.lib}" excludes="README" />
-	  	</copy>
+		<copy todir="${project.tmp}/${project.name}/${folder}">
+			<fileset dir="${project.lib}" excludes="README" />
+		</copy>
+		<copy todir="${project.tmp}/${project.name}/shaders">
+			<fileset dir="${project.shaders}" excludes="README" />
+		</copy>
 	</target>
 	
 	
