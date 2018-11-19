@@ -4,9 +4,7 @@ import processing.app.ui.Toolkit;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionListener;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,20 +14,24 @@ import java.util.Arrays;
 // based on
 // https://github.com/processing/processing/blob/master/app/src/processing/app/ui/ColorChooser.java
 
+// TODO: update shader list when switching between sketches
+// TODO: allow copying in both directions < >, deleting
+// TODO: rename button active only if text changed
+// TODO: allow editing, deleting, renaming templates
+// TODO: double click also copies
+// TODO: confirm overwrites
+// TODO: confirm deletion
+// TODO: link to glsl documentation
+// TODO: insert code into PDE (loadShader(), PShader, etc)
 // TODO: use trees to show all files inside data/
 // https://docs.oracle.com/javase/tutorial/uiswing/components/tree.html
 
-// TODO: update shader list when switching between sketches
-/*
-LIST  <  LIST
-      >
-      X
-*/
 
 public class ShaderChooser {
     JDialog window;
-    File pathFrom, pathTo;
+    File templatesPath, sketchDataPath;
     Path sourceFile;
+    private String editorCommand;
     private DefaultListModel userShadersModel;
     private DefaultListModel templateShadersModel;
     private JList userShadersList;
@@ -68,7 +70,7 @@ public class ShaderChooser {
                             (String) userShadersList.getSelectedValue();
                     filenameTextField.setText(sourceFileName);
                     sourceFile = new File(
-                            pathTo.getAbsolutePath() + File.separator +
+                            sketchDataPath.getAbsolutePath() + File.separator +
                                     sourceFileName).toPath();
                     editButton.setEnabled(true);
                     renameButton.setEnabled(true);
@@ -88,11 +90,18 @@ public class ShaderChooser {
 
         editButton.addActionListener(actionEvent -> {
             try {
-                Runtime.getRuntime().exec(new String[]{
-                        "xterm", "-hold", "-e",
-                        "cd " + pathTo.getAbsolutePath() + " ; vi " +
-                                sourceFile.getFileName()});
-                // p.waitFor();
+                String[] parts = editorCommand.split(",");
+
+                // In the received string, replace placeholder variables by
+                // their correct values
+                for(int i=0; i<parts.length; i++) {
+                    parts[i] = parts[i].replace("%PATH%",
+                            sketchDataPath.getAbsolutePath());
+                    parts[i] = parts[i].replace("%FILE%",
+                            sourceFile.getFileName().toString());
+                }
+
+                Runtime.getRuntime().exec(parts);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -105,7 +114,7 @@ public class ShaderChooser {
             if (!targetFileName.contains(".")) {
                 targetFileName = targetFileName + ".glsl";
             }
-            Path targetFile = new File(pathTo.getAbsolutePath() +
+            Path targetFile = new File(sketchDataPath.getAbsolutePath() +
                     File.separator + targetFileName).toPath();
             try {
                 Files.move(sourceFile, targetFile);
@@ -154,12 +163,22 @@ public class ShaderChooser {
                             (String) templateShadersList.getSelectedValue();
                     filenameTextField.setText(sourceFileName);
                     sourceFile = new File(
-                            pathFrom.getAbsolutePath() + File.separator +
+                            templatesPath.getAbsolutePath() + File.separator +
                                     sourceFileName).toPath();
                     editButton.setEnabled(false);
                     renameButton.setEnabled(false);
                     deleteButton.setEnabled(false);
                 });
+        templateShadersList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent evt) {
+                JList list = (JList) evt.getSource();
+                if (evt.getClickCount() == 2) {
+                    int index = list.locationToIndex(evt.getPoint());
+                    System.out.println("Double click on " + index);
+                }
+            }
+        });
         templateShadersList.setVisibleRowCount(18);
         JScrollPane templateShadersScroll =
                 new JScrollPane(templateShadersList);
@@ -178,7 +197,7 @@ public class ShaderChooser {
             if (!targetFileName.contains(".")) {
                 targetFileName = targetFileName + ".glsl";
             }
-            Path targetFile = new File(pathTo.getAbsolutePath() +
+            Path targetFile = new File(sketchDataPath.getAbsolutePath() +
                     File.separator + targetFileName).toPath();
             try {
                 Files.copy(sourceFile, targetFile);
@@ -248,21 +267,23 @@ public class ShaderChooser {
         }
     }
 
-    public void setPaths(File pathFrom, File pathTo) {
-        this.pathFrom = pathFrom;
-        this.pathTo = pathTo;
+    public void setTemplatesPath(File templatesPath) {
+        this.templatesPath = templatesPath;
+    }
+    public void setSketchDataPath(File sketchDataPath) {
+        this.sketchDataPath = sketchDataPath;
 
         try {
             // Create data folder if missing
-            Files.createDirectories(pathTo.toPath());
+            Files.createDirectories(sketchDataPath.toPath());
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     public void populate() {
-        if (pathFrom.exists() && pathFrom.isDirectory()) {
-            File[] files = pathFrom.listFiles(
+        if (templatesPath.exists() && templatesPath.isDirectory()) {
+            File[] files = templatesPath.listFiles(
                     (dir, name) -> name.matches(".*\\.(glsl|vert|frag)$"));
             Arrays.sort(files);
             setTemplateShaders(files);
@@ -270,7 +291,7 @@ public class ShaderChooser {
             setTemplateShaders(null);
         }
 
-        if (pathTo.exists() && pathTo.isDirectory()) {
+        if (sketchDataPath.exists() && sketchDataPath.isDirectory()) {
 
             // Recursive version, for the future
 //            try {
@@ -282,7 +303,7 @@ public class ShaderChooser {
 //            }
 
             // This is not recursive
-            File[] files = pathTo.listFiles(
+            File[] files = sketchDataPath.listFiles(
                     (dir, name) -> name.matches(".*\\.(glsl|vert|frag)$"));
             Arrays.sort(files);
             setOwnShaders(files);
@@ -291,5 +312,9 @@ public class ShaderChooser {
             setOwnShaders(null);
         }
 
+    }
+
+    public void setEditorCommand(String command) {
+        editorCommand = command;
     }
 }
