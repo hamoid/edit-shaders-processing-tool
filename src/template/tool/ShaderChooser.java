@@ -1,5 +1,7 @@
 package template.tool;
 
+import processing.app.Base;
+import processing.app.ui.Editor;
 import processing.app.ui.Toolkit;
 
 import javax.swing.*;
@@ -14,7 +16,6 @@ import java.util.Arrays;
 // based on
 // https://github.com/processing/processing/blob/master/app/src/processing/app/ui/ColorChooser.java
 
-// TODO: update shader list when switching between sketches
 // TODO: allow copying in both directions < >, deleting
 // TODO: rename button active only if text changed
 // TODO: allow editing, deleting, renaming templates
@@ -41,10 +42,25 @@ public class ShaderChooser {
     private JButton renameButton;
     private JTextField filenameTextField;
     private JButton createButton;
+    private Base base;
+    private Editor editor;
+    private Timer timer;
 
-    public ShaderChooser(Frame owner, boolean modal,
+
+    public ShaderChooser(Base base, boolean modal,
                          ActionListener actionListener) {
-        window = new JDialog(owner, "Edit Shader", modal);
+        this.base = base;
+
+        window = new JDialog(base.getActiveEditor(), "Edit Shader", modal);
+
+        // Check if the active editor has changed every 200ms
+        timer = new Timer(200, actionEvent -> {
+            if(editor != base.getActiveEditor()) {
+                editor = base.getActiveEditor();
+                populate();
+            }
+        });
+        timer.start();
 
         Container pane = window.getContentPane();
         pane.setLayout(new BoxLayout(pane, BoxLayout.LINE_AXIS));
@@ -94,7 +110,7 @@ public class ShaderChooser {
 
                 // In the received string, replace placeholder variables by
                 // their correct values
-                for(int i=0; i<parts.length; i++) {
+                for (int i = 0; i < parts.length; i++) {
                     parts[i] = parts[i].replace("%PATH%",
                             sketchDataPath.getAbsolutePath());
                     parts[i] = parts[i].replace("%FILE%",
@@ -270,8 +286,9 @@ public class ShaderChooser {
     public void setTemplatesPath(File templatesPath) {
         this.templatesPath = templatesPath;
     }
-    public void setSketchDataPath(File sketchDataPath) {
-        this.sketchDataPath = sketchDataPath;
+
+    public void populate() {
+        sketchDataPath = base.getActiveEditor().getSketch().getDataFolder();
 
         try {
             // Create data folder if missing
@@ -279,9 +296,7 @@ public class ShaderChooser {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
 
-    public void populate() {
         if (templatesPath.exists() && templatesPath.isDirectory()) {
             File[] files = templatesPath.listFiles(
                     (dir, name) -> name.matches(".*\\.(glsl|vert|frag)$"));

@@ -30,8 +30,6 @@ import processing.app.Platform;
 import processing.app.Preferences;
 import processing.app.tools.Tool;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.File;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -63,7 +61,7 @@ public class EditShaders implements Tool {
         if (shaderChooser == null) {
             synchronized (EditShaders.class) {
                 if (shaderChooser == null) {
-                    shaderChooser = new ShaderChooser(base.getActiveEditor(),
+                    shaderChooser = new ShaderChooser(base,
                             false, e -> {
                                 //Clipboard c = Toolkit.getSystemClipboard();
                                 //c.setContents(new StringSelection
@@ -87,8 +85,6 @@ public class EditShaders implements Tool {
             }
         }
         shaderChooser.show();
-        shaderChooser.setSketchDataPath(base.getActiveEditor()
-                .getSketch().getDataFolder());
         shaderChooser.populate();
 
         //base.getActiveEditor().statusNotice("data folder not found");
