@@ -221,12 +221,6 @@ public class ShaderChooser {
         Toolkit.setIcon(window);
     }
 
-    private void onCopyRightPressed(ActionEvent ev) {
-    }
-
-    private void onCopyLeftPressed(ActionEvent ev) {
-    }
-
     public void show() {
         window.setVisible(true);
     }
@@ -303,7 +297,32 @@ public class ShaderChooser {
         editorCommand = command;
     }
 
-    private void onCreatePressed(ActionEvent actionEvent) {
+
+    /*
+                                        _
+                                       | |
+           ___  __   __   ___   _ __   | |_   ___
+          / _ \ \ \ / /  / _ \ | '_ \  | __| / __|
+         |  __/  \ V /  |  __/ | | | | | |_  \__ \
+          \___|   \_/    \___| |_| |_|  \__| |___/
+
+    */
+    private void onCopyRightPressed(ActionEvent ev) {
+    }
+
+    private void onCopyLeftPressed(ActionEvent ev) {
+        String targetFileName = sourceFile.getFileName().toString();
+        Path targetFile = new File(sketchDataPath.getAbsolutePath() +
+                File.separator + targetFileName).toPath();
+        try {
+            Files.copy(sourceFile, targetFile);
+            userShadersModel.addElement(targetFileName);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void onCreatePressed(ActionEvent ev) {
         String targetFileName = filenameTextField.getText();
         if (targetFileName.length() < 6) {
             return;
