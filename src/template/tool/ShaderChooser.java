@@ -5,6 +5,7 @@ import processing.app.ui.Editor;
 import processing.app.ui.Toolkit;
 
 import javax.swing.*;
+import javax.swing.event.ListSelectionEvent;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
@@ -16,15 +17,7 @@ import java.util.Arrays;
 // based on
 // https://github.com/processing/processing/blob/master/app/src/processing/app/ui/ColorChooser.java
 
-// TODO: allow copying in both directions < >, deleting
-// TODO: rename button active only if text changed
-// TODO: allow editing, deleting, renaming templates
-// TODO: double click also copies
-// TODO: confirm overwrites
-// TODO: confirm deletion
-// TODO: link to glsl documentation
-// TODO: insert code into PDE (loadShader(), PShader, etc)
-// TODO: use trees to show all files inside data/
+// TODO: use trees to show all files inside data/ ?
 // https://docs.oracle.com/javase/tutorial/uiswing/components/tree.html
 
 
@@ -55,25 +48,26 @@ public class ShaderChooser {
 
         // Check if the active editor has changed every 200ms
         timer = new Timer(200, actionEvent -> {
-            if(editor != base.getActiveEditor()) {
+            if (editor != base.getActiveEditor()) {
                 editor = base.getActiveEditor();
                 populate();
             }
         });
         timer.start();
 
-        Container pane = window.getContentPane();
-        pane.setLayout(new BoxLayout(pane, BoxLayout.LINE_AXIS));
 
+        /*
+  _           __   _
+ | |         / _| | |
+ | |   ___  | |_  | |_
+ | |  / _ \ |  _| | __|
+ | | |  __/ | |   | |_
+ |_|  \___| |_|    \__|
+
+         */
         JPanel paneLeft = new JPanel();
-        JPanel paneRight = new JPanel();
-
         paneLeft.setLayout(new BorderLayout());
-        paneRight.setLayout(new BorderLayout());
 
-
-        // ---------------------------------------------
-        // 1. user
         userShadersModel = new DefaultListModel();
 
         //Create the list and put it in a scroll pane.
@@ -98,59 +92,18 @@ public class ShaderChooser {
         paneLeft.add(new JLabel("Sketch"), BorderLayout.PAGE_START);
         paneLeft.add(userShadersScroll, BorderLayout.CENTER);
 
-        // ---------------------------------------------
         // buttons
         editButton = new JButton("edit");
+        editButton.addActionListener(
+// In the received string, replace placeholder variables by
+// their correct values
+                this::onEditPressed);
+
         renameButton = new JButton("rename");
+        renameButton.addActionListener(this::onRenamePressed);
+
         deleteButton = new JButton("delete");
-
-        editButton.addActionListener(actionEvent -> {
-            try {
-                String[] parts = editorCommand.split(",");
-
-                // In the received string, replace placeholder variables by
-                // their correct values
-                for (int i = 0; i < parts.length; i++) {
-                    parts[i] = parts[i].replace("%PATH%",
-                            sketchDataPath.getAbsolutePath());
-                    parts[i] = parts[i].replace("%FILE%",
-                            sourceFile.getFileName().toString());
-                }
-
-                Runtime.getRuntime().exec(parts);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
-        renameButton.addActionListener(actionEvent -> {
-            String targetFileName = filenameTextField.getText();
-            if (targetFileName.length() < 6) {
-                return;
-            }
-            if (!targetFileName.contains(".")) {
-                targetFileName = targetFileName + ".glsl";
-            }
-            Path targetFile = new File(sketchDataPath.getAbsolutePath() +
-                    File.separator + targetFileName).toPath();
-            try {
-                Files.move(sourceFile, targetFile);
-                int index = userShadersList.getSelectedIndex();
-                userShadersModel.remove(index);
-                userShadersModel.addElement(targetFileName);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
-        deleteButton.addActionListener(actionEvent -> {
-            try {
-                Files.deleteIfExists(sourceFile.toAbsolutePath());
-                int index = userShadersList.getSelectedIndex();
-                userShadersModel.remove(index);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            filenameTextField.setText("");
-        });
+        deleteButton.addActionListener(this::onDeletePressed);
 
         JPanel buttons1 = new JPanel();
         buttons1.setLayout(new BoxLayout(buttons1, BoxLayout.LINE_AXIS));
@@ -164,8 +117,37 @@ public class ShaderChooser {
         paneLeft.add(buttons1, BorderLayout.PAGE_END);
 
 
-        // ---------------------------------------------
-        // 2. template list
+/*
+              _       _       _   _
+             (_)     | |     | | | |
+  _ __ ___    _    __| |   __| | | |   ___
+ | '_ ` _ \  | |  / _` |  / _` | | |  / _ \
+ | | | | | | | | | (_| | | (_| | | | |  __/
+ |_| |_| |_| |_|  \__,_|  \__,_| |_|  \___|
+
+*/
+
+        JPanel paneMid = new JPanel();
+        paneMid.setLayout(new BoxLayout(paneMid, BoxLayout.PAGE_AXIS));
+        JButton copyLButton = new JButton("  <  ");
+        JButton copyRButton = new JButton("  >  ");
+        paneMid.add(copyLButton);
+        paneMid.add(copyRButton);
+
+/*
+         _           _       _
+        (_)         | |     | |
+  _ __   _    __ _  | |__   | |_
+ | '__| | |  / _` | | '_ \  | __|
+ | |    | | | (_| | | | | | | |_
+ |_|    |_|  \__, | |_| |_|  \__|
+              __/ |
+             |___/
+
+ */
+        JPanel paneRight = new JPanel();
+        paneRight.setLayout(new BorderLayout());
+
         templateShadersModel = new DefaultListModel();
 
         //Create the list and put it in a scroll pane.
@@ -173,18 +155,8 @@ public class ShaderChooser {
         templateShadersList
                 .setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         templateShadersList.setSelectedIndex(0);
-        templateShadersList.addListSelectionListener(
-                listSelectionEvent -> {
-                    String sourceFileName =
-                            (String) templateShadersList.getSelectedValue();
-                    filenameTextField.setText(sourceFileName);
-                    sourceFile = new File(
-                            templatesPath.getAbsolutePath() + File.separator +
-                                    sourceFileName).toPath();
-                    editButton.setEnabled(false);
-                    renameButton.setEnabled(false);
-                    deleteButton.setEnabled(false);
-                });
+        templateShadersList
+                .addListSelectionListener(this::onTemplateShaderSelected);
         templateShadersList.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent evt) {
@@ -204,24 +176,10 @@ public class ShaderChooser {
 
         // ---------------------------------------------
         // buttons
+
         createButton = new JButton("create");
-        createButton.addActionListener(actionEvent -> {
-            String targetFileName = filenameTextField.getText();
-            if (targetFileName.length() < 6) {
-                return;
-            }
-            if (!targetFileName.contains(".")) {
-                targetFileName = targetFileName + ".glsl";
-            }
-            Path targetFile = new File(sketchDataPath.getAbsolutePath() +
-                    File.separator + targetFileName).toPath();
-            try {
-                Files.copy(sourceFile, targetFile);
-                userShadersModel.addElement(targetFileName);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
+        createButton.addActionListener(this::onCreatePressed);
+
         filenameTextField = new JTextField(10);
 
         JPanel buttons2 = new JPanel();
@@ -233,11 +191,23 @@ public class ShaderChooser {
 
         paneRight.add(buttons2, BorderLayout.PAGE_END);
 
+
+/*
+          _   _
+         | | | |
+   __ _  | | | |
+  / _` | | | | |
+ | (_| | | | | |
+  \__,_| |_| |_|
+
+
+ */
+        Container pane = window.getContentPane();
+        pane.setLayout(new BoxLayout(pane, BoxLayout.LINE_AXIS));
+
         pane.add(paneLeft);
+        pane.add(paneMid);
         pane.add(paneRight);
-
-
-        // ---------------------------------------------
 
         window.pack();
         //window.setResizable(false);
@@ -331,5 +301,85 @@ public class ShaderChooser {
 
     public void setEditorCommand(String command) {
         editorCommand = command;
+    }
+
+    private void onCreatePressed(ActionEvent actionEvent) {
+        String targetFileName = filenameTextField.getText();
+        if (targetFileName.length() < 6) {
+            return;
+        }
+        if (!targetFileName.contains(".")) {
+            targetFileName = targetFileName + ".glsl";
+        }
+        Path targetFile = new File(sketchDataPath.getAbsolutePath() +
+                File.separator + targetFileName).toPath();
+        try {
+            Files.copy(sourceFile, targetFile);
+            userShadersModel.addElement(targetFileName);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void onTemplateShaderSelected(ListSelectionEvent ev) {
+        String sourceFileName =
+                (String) templateShadersList.getSelectedValue();
+        filenameTextField.setText(sourceFileName);
+        sourceFile = new File(
+                templatesPath.getAbsolutePath() + File.separator +
+                        sourceFileName).toPath();
+        editButton.setEnabled(false);
+        renameButton.setEnabled(false);
+        deleteButton.setEnabled(false);
+    }
+
+    private void onRenamePressed(ActionEvent ev) {
+        String targetFileName = filenameTextField.getText();
+        if (targetFileName.length() < 6) {
+            return;
+        }
+        if (!targetFileName.contains(".")) {
+            targetFileName = targetFileName + ".glsl";
+        }
+        Path targetFile = new File(sketchDataPath.getAbsolutePath() +
+                File.separator + targetFileName).toPath();
+        try {
+            Files.move(sourceFile, targetFile);
+            int index = userShadersList.getSelectedIndex();
+            userShadersModel.remove(index);
+            userShadersModel.addElement(targetFileName);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void onDeletePressed(ActionEvent ev) {
+        try {
+            Files.deleteIfExists(sourceFile.toAbsolutePath());
+            int index = userShadersList.getSelectedIndex();
+            userShadersModel.remove(index);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        filenameTextField.setText("");
+    }
+
+    private void onEditPressed(ActionEvent ev) {
+        try {
+            String[] parts = editorCommand.split(",");
+
+            // In the received string, replace placeholder variables by
+            // their correct values
+            for (int i = 0; i < parts.length; i++) {
+                parts[i] = parts[i].replace("%PATH%",
+                        sketchDataPath.getAbsolutePath());
+                parts[i] = parts[i].replace("%FILE%",
+                        sourceFile.getFileName().toString());
+            }
+
+            Runtime.getRuntime().exec(parts);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
