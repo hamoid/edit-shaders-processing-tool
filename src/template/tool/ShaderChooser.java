@@ -33,6 +33,9 @@ public class ShaderChooser {
     private JButton editButton;
     private JButton deleteButton;
     private JButton renameButton;
+    private JButton copyRightButton;
+    private JButton copyLeftButton;
+    private MouseAdapter templateShadersListClick;
     private JTextField filenameTextField;
     private JButton createButton;
     private Base base;
@@ -55,6 +58,16 @@ public class ShaderChooser {
         });
         timer.start();
 
+        templateShadersListClick = new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent evt) {
+                JList list = (JList) evt.getSource();
+                if (evt.getClickCount() == 2) {
+                    int index = list.locationToIndex(evt.getPoint());
+                    System.out.println("Double click on " + index);
+                }
+            }
+        };
 
         /*
   _           __   _
@@ -65,6 +78,7 @@ public class ShaderChooser {
  |_|  \___| |_|    \__|
 
          */
+
         JPanel paneLeft = new JPanel();
         paneLeft.setLayout(new BorderLayout());
 
@@ -74,30 +88,15 @@ public class ShaderChooser {
         userShadersList = new JList(userShadersModel);
         userShadersList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         userShadersList.setSelectedIndex(0);
-        userShadersList.addListSelectionListener(
-                listSelectionEvent -> {
-                    String sourceFileName =
-                            (String) userShadersList.getSelectedValue();
-                    filenameTextField.setText(sourceFileName);
-                    sourceFile = new File(
-                            sketchDataPath.getAbsolutePath() + File.separator +
-                                    sourceFileName).toPath();
-                    editButton.setEnabled(true);
-                    renameButton.setEnabled(true);
-                    deleteButton.setEnabled(true);
-                });
+        userShadersList.addListSelectionListener(this::userShaderSelected);
         userShadersList.setVisibleRowCount(18);
         JScrollPane userShadersScroll = new JScrollPane(userShadersList);
 
         paneLeft.add(new JLabel("Sketch"), BorderLayout.PAGE_START);
         paneLeft.add(userShadersScroll, BorderLayout.CENTER);
 
-        // buttons
         editButton = new JButton("edit");
-        editButton.addActionListener(
-// In the received string, replace placeholder variables by
-// their correct values
-                this::onEditPressed);
+        editButton.addActionListener(this::onEditPressed);
 
         renameButton = new JButton("rename");
         renameButton.addActionListener(this::onRenamePressed);
@@ -129,10 +128,15 @@ public class ShaderChooser {
 
         JPanel paneMid = new JPanel();
         paneMid.setLayout(new BoxLayout(paneMid, BoxLayout.PAGE_AXIS));
-        JButton copyLButton = new JButton("  <  ");
-        JButton copyRButton = new JButton("  >  ");
-        paneMid.add(copyLButton);
-        paneMid.add(copyRButton);
+
+        copyLeftButton = new JButton("  <  ");
+        copyLeftButton.addActionListener(this::onCopyLeftPressed);
+
+        copyRightButton = new JButton("  >  ");
+        copyRightButton.addActionListener(this::onCopyRightPressed);
+
+        paneMid.add(copyLeftButton);
+        paneMid.add(copyRightButton);
 
 /*
          _           _       _
@@ -157,16 +161,7 @@ public class ShaderChooser {
         templateShadersList.setSelectedIndex(0);
         templateShadersList
                 .addListSelectionListener(this::onTemplateShaderSelected);
-        templateShadersList.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent evt) {
-                JList list = (JList) evt.getSource();
-                if (evt.getClickCount() == 2) {
-                    int index = list.locationToIndex(evt.getPoint());
-                    System.out.println("Double click on " + index);
-                }
-            }
-        });
+        templateShadersList.addMouseListener(templateShadersListClick);
         templateShadersList.setVisibleRowCount(18);
         JScrollPane templateShadersScroll =
                 new JScrollPane(templateShadersList);
@@ -226,10 +221,15 @@ public class ShaderChooser {
         Toolkit.setIcon(window);
     }
 
+    private void onCopyRightPressed(ActionEvent ev) {
+    }
+
+    private void onCopyLeftPressed(ActionEvent ev) {
+    }
+
     public void show() {
         window.setVisible(true);
     }
-
 
     public void hide() {
         window.setVisible(false);
@@ -321,18 +321,6 @@ public class ShaderChooser {
         }
     }
 
-    private void onTemplateShaderSelected(ListSelectionEvent ev) {
-        String sourceFileName =
-                (String) templateShadersList.getSelectedValue();
-        filenameTextField.setText(sourceFileName);
-        sourceFile = new File(
-                templatesPath.getAbsolutePath() + File.separator +
-                        sourceFileName).toPath();
-        editButton.setEnabled(false);
-        renameButton.setEnabled(false);
-        deleteButton.setEnabled(false);
-    }
-
     private void onRenamePressed(ActionEvent ev) {
         String targetFileName = filenameTextField.getText();
         if (targetFileName.length() < 6) {
@@ -381,5 +369,29 @@ public class ShaderChooser {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private void userShaderSelected(ListSelectionEvent ev) {
+        String sourceFileName =
+                (String) userShadersList.getSelectedValue();
+        filenameTextField.setText(sourceFileName);
+        sourceFile = new File(
+                sketchDataPath.getAbsolutePath() + File.separator +
+                        sourceFileName).toPath();
+        editButton.setEnabled(true);
+        renameButton.setEnabled(true);
+        deleteButton.setEnabled(true);
+    }
+
+    private void onTemplateShaderSelected(ListSelectionEvent ev) {
+        String sourceFileName =
+                (String) templateShadersList.getSelectedValue();
+        filenameTextField.setText(sourceFileName);
+        sourceFile = new File(
+                templatesPath.getAbsolutePath() + File.separator +
+                        sourceFileName).toPath();
+        editButton.setEnabled(false);
+        renameButton.setEnabled(false);
+        deleteButton.setEnabled(false);
     }
 }
