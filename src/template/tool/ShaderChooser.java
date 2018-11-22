@@ -375,13 +375,14 @@ public class ShaderChooser {
         try {
             String[] parts = editorCommand.split(",");
 
-            // In the received string, replace placeholder variables by
-            // their correct values
+            // In editorCommand, replace placeholder variables by
+            // their correct values. I could replace before splitting,
+            // but
+            String path = sketchDataPath.getAbsolutePath();
+            String file = sourceFile.getFileName().toString();
             for (int i = 0; i < parts.length; i++) {
-                parts[i] = parts[i].replace("%PATH%",
-                        sketchDataPath.getAbsolutePath());
-                parts[i] = parts[i].replace("%FILE%",
-                        sourceFile.getFileName().toString());
+                parts[i] = parts[i].replace("%PATH%", path);
+                parts[i] = parts[i].replace("%FILE%", file);
             }
 
             Runtime.getRuntime().exec(parts);
