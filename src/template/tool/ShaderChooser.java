@@ -11,7 +11,6 @@ import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 
 // based on
@@ -22,26 +21,24 @@ import java.util.Arrays;
 
 
 public class ShaderChooser {
-    JDialog window;
-    File templatesPath, sketchDataPath;
-    Path sourceFile;
+    private JDialog window;
+    private File templatesPath, sketchDataPath;
     private String editorCommand;
     private DefaultListModel userShadersModel;
     private DefaultListModel templateShadersModel;
+    private DefaultListModel clickedModel;
+
     private JList userShadersList;
     private JList templateShadersList;
-    private JButton editButton;
-    private JButton deleteButton;
-    private JButton renameButton;
-    private JButton copyRightButton;
-    private JButton copyLeftButton;
-    private MouseAdapter templateShadersListClick;
-    private JTextField filenameTextField;
-    private JButton createButton;
+    private JList clickedList;
+
+    private int clickedIndex;
+    private String clickedPath;
+
     private Base base;
     private Editor editor;
     private Timer timer;
-
+    private FileAction fileAction;
 
     public ShaderChooser(Base base, boolean modal,
                          ActionListener actionListener) {
@@ -58,7 +55,7 @@ public class ShaderChooser {
         });
         timer.start();
 
-        templateShadersListClick = new MouseAdapter() {
+        MouseAdapter templateShadersListClick = new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent evt) {
                 JList list = (JList) evt.getSource();
@@ -68,6 +65,8 @@ public class ShaderChooser {
                 }
             }
         };
+
+        fileAction = new FileAction();
 
         /*
   _           __   _
@@ -95,13 +94,16 @@ public class ShaderChooser {
         paneLeft.add(new JLabel("Sketch"), BorderLayout.PAGE_START);
         paneLeft.add(userShadersScroll, BorderLayout.CENTER);
 
-        editButton = new JButton("edit");
+        JButton editButton = new JButton("edit");
         editButton.addActionListener(this::onEditPressed);
 
-        renameButton = new JButton("rename");
+        JButton renameButton = new JButton("rename");
         renameButton.addActionListener(this::onRenamePressed);
 
-        deleteButton = new JButton("delete");
+        JButton cloneButton = new JButton("clone");
+        cloneButton.addActionListener(this::onClonePressed);
+
+        JButton deleteButton = new JButton("delete");
         deleteButton.addActionListener(this::onDeletePressed);
 
         JPanel buttons1 = new JPanel();
@@ -109,6 +111,8 @@ public class ShaderChooser {
         buttons1.add(editButton);
         buttons1.add(Box.createHorizontalStrut(5));
         buttons1.add(renameButton);
+        buttons1.add(Box.createHorizontalStrut(5));
+        buttons1.add(cloneButton);
         buttons1.add(Box.createHorizontalStrut(5));
         buttons1.add(deleteButton);
         buttons1.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
@@ -129,10 +133,10 @@ public class ShaderChooser {
         JPanel paneMid = new JPanel();
         paneMid.setLayout(new BoxLayout(paneMid, BoxLayout.PAGE_AXIS));
 
-        copyLeftButton = new JButton("  <  ");
+        JButton copyLeftButton = new JButton("  <  ");
         copyLeftButton.addActionListener(this::onCopyLeftPressed);
 
-        copyRightButton = new JButton("  >  ");
+        JButton copyRightButton = new JButton("  >  ");
         copyRightButton.addActionListener(this::onCopyRightPressed);
 
         paneMid.add(copyLeftButton);
@@ -168,23 +172,6 @@ public class ShaderChooser {
 
         paneRight.add(new JLabel("Templates"), BorderLayout.PAGE_START);
         paneRight.add(templateShadersScroll, BorderLayout.CENTER);
-
-        // ---------------------------------------------
-        // buttons
-
-        createButton = new JButton("create");
-        createButton.addActionListener(this::onCreatePressed);
-
-        filenameTextField = new JTextField(10);
-
-        JPanel buttons2 = new JPanel();
-        buttons2.setLayout(new BoxLayout(buttons2, BoxLayout.LINE_AXIS));
-        buttons2.add(filenameTextField);
-        buttons2.add(Box.createHorizontalStrut(5));
-        buttons2.add(createButton);
-        buttons2.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-
-        paneRight.add(buttons2, BorderLayout.PAGE_END);
 
 
 /*
@@ -271,22 +258,10 @@ public class ShaderChooser {
         }
 
         if (sketchDataPath.exists() && sketchDataPath.isDirectory()) {
-
-            // Recursive version, for the future
-//            try {
-//                Files.walk(Paths.get(dataPath))
-//                        .filter(Files::isRegularFile)
-//                        .forEach(System.out::println);
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-
-            // This is not recursive
             File[] files = sketchDataPath.listFiles(
                     (dir, name) -> name.matches(".*\\.(glsl|vert|frag)$"));
             Arrays.sort(files);
             setOwnShaders(files);
-
         } else {
             setOwnShaders(null);
         }
@@ -308,82 +283,129 @@ public class ShaderChooser {
 
     */
     private void onCopyRightPressed(ActionEvent ev) {
+        if (clickedList == userShadersList) {
+            fileAction.dst = new File(templatesPath.getAbsolutePath() +
+                    File.separator +
+                    fileAction.src.getFileName().toString()).toPath();
+            fileAction.operation = FileAction.Operation.COPY;
+
+            fileCopyOrMove();
+        }
     }
 
     private void onCopyLeftPressed(ActionEvent ev) {
-        String targetFileName = sourceFile.getFileName().toString();
-        Path targetFile = new File(sketchDataPath.getAbsolutePath() +
-                File.separator + targetFileName).toPath();
-        try {
-            Files.copy(sourceFile, targetFile);
-            userShadersModel.addElement(targetFileName);
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (clickedList == templateShadersList) {
+            fileAction.dst = new File(sketchDataPath.getAbsolutePath() +
+                    File.separator +
+                    fileAction.src.getFileName().toString()).toPath();
+            fileAction.operation = FileAction.Operation.COPY;
+
+            fileCopyOrMove();
         }
     }
 
-    private void onCreatePressed(ActionEvent ev) {
-        String targetFileName = filenameTextField.getText();
-        if (targetFileName.length() < 6) {
-            return;
+    private void fileCopyOrMove() {
+        if (Files.exists(fileAction.dst)) {
+            String[] options = new String[]{"Cancel", "Rename", "Overwrite"};
+            int response = JOptionPane.showOptionDialog(null,
+                    "Do you want to overwrite " +
+                            fileAction.dst.getFileName().toString() +
+                            "\nor save it with a new name?",
+                    "File already exists!",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[0]);
+
+            if (response == 2) { // Overwrite
+                fileAction.execute();
+            } else if (response == 1) { // New name
+                String fileName =
+                        promptFileName(fileAction.dst.getFileName().toString());
+
+                if (fileName != null) {
+                    String path = fileAction.dst.getParent().toString();
+                    fileAction.dst = new File(path +
+                            File.separator + fileName).toPath();
+
+                    fileCopyOrMove();
+                }
+            }
+
+        } else {
+            fileAction.execute();
+            populate();
         }
-        if (!targetFileName.contains(".")) {
-            targetFileName = targetFileName + ".glsl";
-        }
-        Path targetFile = new File(sketchDataPath.getAbsolutePath() +
-                File.separator + targetFileName).toPath();
-        try {
-            Files.copy(sourceFile, targetFile);
-            userShadersModel.addElement(targetFileName);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    }
+
+    private String promptFileName(String targetFileName) {
+        boolean done = false;
+        do {
+            targetFileName = JOptionPane.showInputDialog(
+                    "New file name", targetFileName);
+            if (targetFileName == null) {
+                done = true;
+            } else if (!targetFileName.matches(".*\\.(glsl|vert|frag)$")) {
+                JOptionPane.showMessageDialog(null,
+                        "File extension should be " +
+                                ".glsl, .vert or .frag");
+            } else {
+                done = true;
+            }
+        } while (!done);
+        return targetFileName;
     }
 
     private void onRenamePressed(ActionEvent ev) {
-        String targetFileName = filenameTextField.getText();
-        if (targetFileName.length() < 6) {
-            return;
+        String fileName =
+                promptFileName((String) clickedList.getSelectedValue());
+
+        if (fileName != null) {
+            fileAction.dst = new File(clickedPath +
+                    File.separator + fileName).toPath();
+            fileAction.operation = FileAction.Operation.MOVE;
+
+            fileCopyOrMove();
         }
-        if (!targetFileName.contains(".")) {
-            targetFileName = targetFileName + ".glsl";
-        }
-        Path targetFile = new File(sketchDataPath.getAbsolutePath() +
-                File.separator + targetFileName).toPath();
-        try {
-            Files.move(sourceFile, targetFile);
-            int index = userShadersList.getSelectedIndex();
-            userShadersModel.remove(index);
-            userShadersModel.addElement(targetFileName);
-        } catch (IOException e) {
-            e.printStackTrace();
+    }
+
+    private void onClonePressed(ActionEvent ev) {
+        String fileName =
+                promptFileName((String) clickedList.getSelectedValue());
+
+        if (fileName != null) {
+            fileAction.dst = new File(clickedPath +
+                    File.separator + fileName).toPath();
+            fileAction.operation = FileAction.Operation.COPY;
+
+            fileCopyOrMove();
         }
     }
 
     private void onDeletePressed(ActionEvent ev) {
-        try {
-            Files.deleteIfExists(sourceFile.toAbsolutePath());
-            int index = userShadersList.getSelectedIndex();
-            userShadersModel.remove(index);
-        } catch (IOException e) {
-            e.printStackTrace();
+        String[] options = new String[]{"Cancel", "Delete"};
+        int response = JOptionPane.showOptionDialog(null,
+                "Do you want to delete " + clickedList.getSelectedValue() +
+                        "?", "Please confirm",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE,
+                null, options, options[0]);
+
+        if (response == 1) {
+            try {
+                Files.deleteIfExists(fileAction.src.toAbsolutePath());
+                populate();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
-        filenameTextField.setText("");
     }
 
     private void onEditPressed(ActionEvent ev) {
         try {
-            String[] parts = editorCommand.split(",");
-
-            // In editorCommand, replace placeholder variables by
-            // their correct values. I could replace before splitting,
-            // but
-            String path = sketchDataPath.getAbsolutePath();
-            String file = sourceFile.getFileName().toString();
-            for (int i = 0; i < parts.length; i++) {
-                parts[i] = parts[i].replace("%PATH%", path);
-                parts[i] = parts[i].replace("%FILE%", file);
-            }
+            String[] parts = editorCommand
+                    .replace("%PATH%", clickedPath)
+                    .replace("%FILE%",
+                            (String) clickedList.getSelectedValue())
+                    .split(",");
 
             Runtime.getRuntime().exec(parts);
         } catch (Exception e) {
@@ -391,27 +413,32 @@ public class ShaderChooser {
         }
     }
 
+    private void updateFileAction() {
+        String sourceFileName = (String) clickedList.getSelectedValue();
+
+        fileAction.src = new File(clickedPath
+                + File.separator + sourceFileName).toPath();
+    }
+
     private void userShaderSelected(ListSelectionEvent ev) {
-        String sourceFileName =
-                (String) userShadersList.getSelectedValue();
-        filenameTextField.setText(sourceFileName);
-        sourceFile = new File(
-                sketchDataPath.getAbsolutePath() + File.separator +
-                        sourceFileName).toPath();
-        editButton.setEnabled(true);
-        renameButton.setEnabled(true);
-        deleteButton.setEnabled(true);
+        clickedList = userShadersList;
+        clickedIndex = ev.getFirstIndex();
+        clickedModel = userShadersModel;
+        clickedPath = sketchDataPath.getAbsolutePath();
+        updateFileAction();
+
+        // deselect all entries in other list
+        templateShadersList.clearSelection();
     }
 
     private void onTemplateShaderSelected(ListSelectionEvent ev) {
-        String sourceFileName =
-                (String) templateShadersList.getSelectedValue();
-        filenameTextField.setText(sourceFileName);
-        sourceFile = new File(
-                templatesPath.getAbsolutePath() + File.separator +
-                        sourceFileName).toPath();
-        editButton.setEnabled(false);
-        renameButton.setEnabled(false);
-        deleteButton.setEnabled(false);
+        clickedList = templateShadersList;
+        clickedIndex = ev.getFirstIndex();
+        clickedModel = templateShadersModel;
+        clickedPath = templatesPath.getAbsolutePath();
+        updateFileAction();
+
+        // deselect all entries in other list
+        userShadersList.clearSelection();
     }
 }
