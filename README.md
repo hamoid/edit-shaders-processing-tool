@@ -16,4 +16,7 @@ in preferences.txt
 * 0.0.2 Previously the list of shaders found in your sketch would not
 update when swithing between sketches. Now it checks every 100ms to
 see if the editor has changed and rebuilds the list if it has.
+* 0.0.3 Easier to grasp GUI. Ask for confirmations when deleting.
+Warn when overwriting. Allow copying in both directions between
+the sketch and the shader template folder. Add clone option.
 
