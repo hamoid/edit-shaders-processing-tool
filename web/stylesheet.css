@@ -201,3 +201,9 @@ a:link:visited {
 #footer a, #menu a {
 	color:#333;
 }
+
+ul.visible {
+	list-style-type: square;
+	padding: 10px 26px;
+	margin-top: -20px;
+}
